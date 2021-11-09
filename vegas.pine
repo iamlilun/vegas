@@ -1,0 +1,181 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © iamlilun
+
+/// 時間段只支援 15分,1小時,4小時,1天,1月..所以...
+///!!! 時間段要設為 15分 1小時 4小時 1天 1月 !!!
+///!!! 時間段要設為 15分 1小時 4小時 1天 1月 !!!
+///!!! 時間段要設為 15分 1小時 4小時 1天 1月 !!!
+///!!! 很重要所以說3次 !!!
+
+//@version=5
+indicator(title='vegas改', shorttitle='vegas改', overlay=true)
+
+///
+/// 準備均線數據..
+/// ema12 ema144 ema169 ema288 ema338 ema576 ema676
+/// 
+
+//ema12 過濾線
+len12 = input.int(12, minval=1, title='Length')
+src12 = input(close, title='Source')
+offset12 = input.int(title='Offset', defval=0, minval=-500, maxval=500)
+ema12 = ta.ema(src12, len12)
+plot(ema12, title='EMA12', color=color.new(color.red, 0), offset=offset12) //15 min
+
+//ema144, 169 短期線
+len144 = input.int(144, minval=1, title='Length')
+src144 = input(close, title='Source')
+offset144 = input.int(title='Offset', defval=0, minval=-500, maxval=500)
+ema144 = ta.ema(src144, len144)
+plot(ema144, title='EMA144', color=color.new(color.orange, 0), offset=offset144)
+
+len169 = input.int(169, minval=1, title='Length')
+src169 = input(close, title='Source')
+offset169 = input.int(title='Offset', defval=0, minval=-500, maxval=500)
+ema169 = ta.ema(src169, len169)
+plot(ema169, title='EMA169', color=color.new(color.orange, 0), offset=offset169)
+
+//ema288, 338 中期線
+len288 = input.int(288, minval=1, title='Length')
+src288 = input(close, title='Source')
+offset288 = input.int(title='Offset', defval=0, minval=-500, maxval=500)
+ema288 = ta.ema(src288, len288)
+plot(ema288, title='EMA288', color=color.new(color.white, 0), offset=offset288)
+
+len338 = input.int(338, minval=1, title='Length')
+src338 = input(close, title='Source')
+offset338 = input.int(title='Offset', defval=0, minval=-500, maxval=500)
+ema338 = ta.ema(src338, len338)
+plot(ema338, title='EMA338', color=color.new(color.white, 0), offset=offset338)
+
+//ema576, 676 長期線
+len576 = input.int(576, minval=1, title='Length')
+src576 = input(close, title='Source')
+offset576 = input.int(title='Offset', defval=0, minval=-500, maxval=500)
+ema576 = ta.ema(src576, len576)
+plot(ema576, title='EMA576', color=color.new(color.lime, 0), offset=offset576)
+
+len676 = input.int(676, minval=1, title='Length')
+src676 = input(close, title='Source')
+offset676 = input.int(title='Offset', defval=0, minval=-500, maxval=500)
+ema676 = ta.ema(src676, len676)
+plot(ema676, title='EMA676', color=color.new(color.lime, 0), offset=offset676)
+
+//-------------------------------------
+
+//
+// 基於4倍不逆市..把12MA的4倍也拉進來
+// 原則上邏輯驗證過後就可以設為透明來隱藏
+// 12 * 4 = 48
+// 144 * 4 = 576
+// 169 * 4 = 676
+// 
+
+// 4倍时間換算..
+// fourTimes = str.tostring(str.tonumber(timeframe.period) * 4) 
+// 趕羚羊.轉出來的類型是series string, request.security().不吃..
+// 只好苦工switch..
+string fourTimes = switch timeframe.period
+	//15 min * 4
+	"15" => "60"
+	//1 hour = 60 min * 4
+	"60" => "240"
+	//4 hour = 240 min * 4
+	"240" => "960"
+	//1 day = D * 4
+	"D" => "4D"
+	//1 month = M * 4
+	"M" => "4M"
+	//default
+	=> "60"
+
+// if (barstate.islast)
+    // label.new(bar_index, high + 100, text=fourTimes)
+
+// ema48 = ta.ema(close, 48)
+// plot(ema48, title='EMA48F', color=color.new(#FF00FF, 30), offset=offset12, style=plot.style_line) //pink
+
+ema12f = request.security(syminfo.tickerid, fourTimes, expression=ema12) 
+plot(ema12f, title='EMA12F', color=color.new(#FF0088, 30), offset=offset12, style=plot.style_line) //pink
+
+ema144f = request.security(syminfo.tickerid, fourTimes, expression=ema144) 
+plot(ema144f, title='EMA144F', color=color.new(#FFFF00, 30), offset=offset144, style=plot.style_line) //yellow
+
+ema169f = request.security(syminfo.tickerid, fourTimes, expression=ema169) 
+plot(ema169f, title='EMA169F', color=color.new(#FFFF00, 30), offset=offset169, style=plot.style_line) //yellow
+
+ema288f = request.security(syminfo.tickerid, fourTimes, expression=ema288) 
+plot(ema288f, title='EMA288F', color=color.new(#808080, 30), offset=offset288, style=plot.style_line) //gray
+
+ema338f = request.security(syminfo.tickerid, fourTimes, expression=ema338) 
+plot(ema338f, title='EMA338F', color=color.new(#808080, 30), offset=offset338, style=plot.style_line) //gray
+
+ema576f = request.security(syminfo.tickerid, fourTimes, expression=ema576) 
+plot(ema576f, title='EMA576F', color=color.new(#00FF00, 30), offset=offset576, style=plot.style_line) //lime
+
+ema676f = request.security(syminfo.tickerid, fourTimes, expression=ema676) 
+plot(ema676f, title='EMA676F', color=color.new(#00FF00, 30), offset=offset676, style=plot.style_line) //lime
+
+//------------------------
+
+///
+/// 進出場邏輯
+/// 
+
+//目前手頭上的單 string long = 多單, short = 空單, null = 無單
+var order = 'null'
+
+//做多條件變數
+var goldFour144 = false //4倍數金叉144
+var goldFour169 = false //4倍數金叉169
+var goldOne144 = false //1倍數金叉144
+var goldOne169 = false //1倍數金叉169
+var barBack = false //K線回踩
+var barOver12Ema = false //K線站上12EMA
+
+//做空條件變數
+var deadFour144 = false //4倍數死叉144
+var deadFour169 = false //4倍數死叉169
+var deadOne144 = false //1倍數死叉144
+var deadOne169 = false //1倍數死叉169
+var barUnder = false //K線回彈
+var barBelow12Ema = false //K線低於12EMA
+
+
+///
+/// 做多條件:
+/// 1. 4倍數 12EMA金叉突破 144,169
+/// 2. 1倍數 12EMA金叉突破 144,169
+/// 3. 1倍數 K線最低價回踩 144,169 (距離2%內就算回踩)
+/// 4. 1倍數 K線站最低價站上12EMA
+///
+
+
+///
+/// 做空條件:
+/// 1. 4倍數 12EMA死叉跌破 144,169
+/// 2. 1倍數 12EMA死叉跌破 144,169
+/// 3. 1倍數 K線最高價回彈 144,169 (距離2%內就算回彈)
+/// 4. 1倍數 K線最高價低於12EMA
+/// 5. 1倍數 K線收盤價站上12EMA反手做多
+///
+
+
+//---------------------------
+
+///
+/// 
+/// 標示 警告
+///
+///
+
+
+///舊邏輯 ===================
+meme = (ema144 > ema169 and ema12[1] < ema144[1] and ema12 >= ema144 and ema12 >= ema169 and ema12[4] < ema169[4]) or (ema144 < ema169 and ema12[1] < ema169[1] and ema12 >= ema144 and ema12 >= ema169 and ema12[4] < ema144[4])
+meme1 = (ema144 > ema169 and ema12[1] > ema169[1] and ema12 <= ema144 and ema12 <= ema169 and ema12[4] > ema144[4]) or (ema144 < ema169 and ema12[1] > ema144[1] and ema12 <= ema144 and ema12 <= ema169 and ema12[4] > ema169[4])
+
+plotshape(meme1, style=shape.labeldown, color=color.new(color.red, 0), location=location.abovebar, size=size.small, text='下', textcolor=color.new(color.white, 0), title='下')
+plotshape(meme, style=shape.labelup, color=color.new(color.green, 0), location=location.belowbar, size=size.small, text='上', textcolor=color.new(color.white, 0), title='上')
+
+// alertcondition(meme1, title='空', message='做空瞜')
+// alertcondition(meme, title='多', message='做多瞜')
