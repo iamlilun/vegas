@@ -1,26 +1,31 @@
 // This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
 // © iamlilun
 
-/// 時間段只支援 15分,1小時,4小時,1天,1月..所以...
-///!!! 時間段要設為 15分 1小時 4小時 1天 1月 !!!
-///!!! 時間段要設為 15分 1小時 4小時 1天 1月 !!!
-///!!! 時間段要設為 15分 1小時 4小時 1天 1月 !!!
-///!!! 很重要所以說3次 !!!
 
 //@version=5
-indicator(title='vegas改', shorttitle='vegas改', overlay=true)
+indicator(title='vegas改', shorttitle='vegas改', overlay=true, max_labels_count=500)
 
-///
+/// -------------------------------------------
 /// 準備均線數據..
 /// ema12 ema144 ema169 ema288 ema338 ema576 ema676
-/// 
+/// ------------------------------------------
 
 //ema12 過濾線
 len12 = input.int(12, minval=1, title='Length')
 src12 = input(close, title='Source')
 offset12 = input.int(title='Offset', defval=0, minval=-500, maxval=500)
 ema12 = ta.ema(src12, len12)
-plot(ema12, title='EMA12', color=color.new(color.red, 0), offset=offset12) //15 min
+plot(ema12, title='EMA12', color=color.new(color.red, 0), offset=offset12)
+
+//
+// 基於4倍不逆市..把12EMA的4倍(48EMA)也拉進來
+// 原則上邏輯驗證過後就可以設為透明來隱藏
+// 12 * 4 = 48
+// 144 * 4 = 576
+// 169 * 4 = 676
+//
+ema48 = ta.ema(close, 48)
+plot(ema48, title='EMA48', color=color.new(#FF00FF, 100), offset=offset12, style=plot.style_line) //pink
 
 //ema144, 169 短期線
 len144 = input.int(144, minval=1, title='Length')
@@ -61,121 +66,243 @@ offset676 = input.int(title='Offset', defval=0, minval=-500, maxval=500)
 ema676 = ta.ema(src676, len676)
 plot(ema676, title='EMA676', color=color.new(color.lime, 0), offset=offset676)
 
-//-------------------------------------
+/// --------------------------------------
+/// 進出場邏輯
+/// --------------------------------------
 
-//
-// 基於4倍不逆市..把12MA的4倍也拉進來
-// 原則上邏輯驗證過後就可以設為透明來隱藏
-// 12 * 4 = 48
-// 144 * 4 = 576
-// 169 * 4 = 676
-// 
 
-// 4倍时間換算..
-// fourTimes = str.tostring(str.tonumber(timeframe.period) * 4) 
-// 趕羚羊.轉出來的類型是series string, request.security().不吃..
-// 只好苦工switch..
-string fourTimes = switch timeframe.period
-	//15 min * 4
-	"15" => "60"
-	//1 hour = 60 min * 4
-	"60" => "240"
-	//4 hour = 240 min * 4
-	"240" => "960"
-	//1 day = D * 4
-	"D" => "4D"
-	//1 month = M * 4
-	"M" => "4M"
-	//default
-	=> "60"
+//多單條件陣列
+// 0 => ema144金叉, 
+// 1 => ema169金叉,
+// 2 => ema576金叉,
+// 3 => ema676金叉,
+// 4 => k線回踩通道
+var longCond = array.new_bool(5, false)
 
-// if (barstate.islast)
-    // label.new(bar_index, high + 100, text=fourTimes)
 
-// ema48 = ta.ema(close, 48)
-// plot(ema48, title='EMA48F', color=color.new(#FF00FF, 30), offset=offset12, style=plot.style_line) //pink
-
-ema12f = request.security(syminfo.tickerid, fourTimes, expression=ema12) 
-plot(ema12f, title='EMA12F', color=color.new(#FF0088, 30), offset=offset12, style=plot.style_line) //pink
-
-ema144f = request.security(syminfo.tickerid, fourTimes, expression=ema144) 
-plot(ema144f, title='EMA144F', color=color.new(#FFFF00, 30), offset=offset144, style=plot.style_line) //yellow
-
-ema169f = request.security(syminfo.tickerid, fourTimes, expression=ema169) 
-plot(ema169f, title='EMA169F', color=color.new(#FFFF00, 30), offset=offset169, style=plot.style_line) //yellow
-
-ema288f = request.security(syminfo.tickerid, fourTimes, expression=ema288) 
-plot(ema288f, title='EMA288F', color=color.new(#808080, 30), offset=offset288, style=plot.style_line) //gray
-
-ema338f = request.security(syminfo.tickerid, fourTimes, expression=ema338) 
-plot(ema338f, title='EMA338F', color=color.new(#808080, 30), offset=offset338, style=plot.style_line) //gray
-
-ema576f = request.security(syminfo.tickerid, fourTimes, expression=ema576) 
-plot(ema576f, title='EMA576F', color=color.new(#00FF00, 30), offset=offset576, style=plot.style_line) //lime
-
-ema676f = request.security(syminfo.tickerid, fourTimes, expression=ema676) 
-plot(ema676f, title='EMA676F', color=color.new(#00FF00, 30), offset=offset676, style=plot.style_line) //lime
-
-//------------------------
+//空單條件陣列
+// 0 => ema144死叉, 
+// 1 => ema169死叉,
+// 2 => ema576死叉,
+// 3 => ema676死叉,
+// 4 => k線回彈通道
+// 5 => 擁有空單
+var shortCond = array.new_bool(6, false)
 
 ///
-/// 進出場邏輯
-/// 
+/// 計算兩個數的差異百分比
+///
+calcPercent(num1, num2) =>
+	pec = (math.abs(num1 - num2) / num2 ) * 100
+    pec
 
-//目前手頭上的單 string long = 多單, short = 空單, null = 無單
-var order = 'null'
 
-//做多條件變數
-var goldFour144 = false //4倍數金叉144
-var goldFour169 = false //4倍數金叉169
-var goldOne144 = false //1倍數金叉144
-var goldOne169 = false //1倍數金叉169
-var barBack = false //K線回踩
-var barOver12Ema = false //K線站上12EMA
+///
+/// 確定K線最低價回踩 144,169 (距離2%內就算回踩)
+///
+checkBarBackTunnel() =>
+	cond = array.copy(longCond)
+	gold144 = array.get(cond, 0)
+	gold169 = array.get(cond, 1)
+	gold576 = array.get(cond, 2)
+	gold676 = array.get(cond, 3)
+	hadBack = array.get(cond, 4)
+	
+	//1倍跟4倍都金叉..且還沒有K線回踩通道的記錄才進判斷
+	if (((gold144 and gold576) or (gold169 and gold676)) and hadBack == false)
+		if(ema144 > ema169) 
+			//ema144在上..計算K線最低價距離ema144的百分比
+			pec = calcPercent(low, ema144)
+			// label.new(bar_index, high + 100, text=str.tostring(pec))
+			hadBack := (pec < 2) or (low <= ema144)
+		else
+			//K線在169上..計算K線最低價距離ema169的百分比
+			pec = calcPercent(low, ema169)
+			// label.new(bar_index, high + 100, text=str.tostring(pec))
+			hadBack := (pec < 2) or (low <= ema169)
+	
+	//return hadBack
+	hadBack
 
-//做空條件變數
-var deadFour144 = false //4倍數死叉144
-var deadFour169 = false //4倍數死叉169
-var deadOne144 = false //1倍數死叉144
-var deadOne169 = false //1倍數死叉169
-var barUnder = false //K線回彈
-var barBelow12Ema = false //K線低於12EMA
+///
+/// 確定K線收盤價站上EMA12
+///
+checkOntoEma12() =>
+	cond = array.copy(longCond)
+	hadBack = array.get(cond, 4)
+	res = hadBack == true and close > ema12
+	if (res == true)
+		//站上ema12表示多單條件滿足..清空條件讓下一筆資料重新判斷
+		for i = 0 to 4
+			array.set(longCond, i, false)
+
+	//return res
+	res
 
 
 ///
 /// 做多條件:
-/// 1. 4倍數 12EMA金叉突破 144,169
-/// 2. 1倍數 12EMA金叉突破 144,169
-/// 3. 1倍數 K線最低價回踩 144,169 (距離2%內就算回踩)
-/// 4. 1倍數 K線站最低價站上12EMA
+/// 4倍數:
+///	 	1. EMA48金叉突破 576,676
+/// 1倍數:
+/// 	1. EMA12金叉突破 144,169
+/// 	2. K線最低價回踩 144,169 (距離2%內就算回踩)
+/// 	3. K線收盤價站上EMA12
+/// 止盈:
+///		@TODO
+/// 止損:
+///		@TODO
 ///
+if ta.crossover(ema12, ema144)
+	//ema12金叉突破ema144
+	array.set(longCond, 0, true)
+	array.set(shortCond, 0, false)
+	array.set(shortCond, 4, false)
 
+if ta.crossover(ema12, ema169)
+	//ema12金叉突破ema144
+	array.set(longCond, 1, true)
+	array.set(shortCond, 1, false)
+	array.set(shortCond, 4, false)
+
+if ta.crossover(ema48, ema576)
+	//ema48金叉突破 576
+	array.set(longCond, 2, true)
+	array.set(shortCond, 2, false)
+	array.set(shortCond, 4, false)
+
+if ta.crossover(ema48, ema676)
+	//ema48金叉突破ema676
+	array.set(longCond, 3, true)
+	array.set(shortCond, 3, false)
+	array.set(shortCond, 4, false)
+
+array.set(longCond, 4, checkBarBackTunnel())
+
+//-----------------------------------
 
 ///
 /// 做空條件:
-/// 1. 4倍數 12EMA死叉跌破 144,169
-/// 2. 1倍數 12EMA死叉跌破 144,169
-/// 3. 1倍數 K線最高價回彈 144,169 (距離2%內就算回彈)
-/// 4. 1倍數 K線最高價低於12EMA
-/// 5. 1倍數 K線收盤價站上12EMA反手做多
+/// 4倍數:
+/// 	1. 48EMA死叉跌破 576,676
+/// 1倍數:
+/// 	1. 12EMA死叉跌破 144,169
+/// 	2. K線最高價回彈 144,169 (距離2%內就算回彈)
+/// 	3. K線最高價低於12EMA
+/// 止盈:
+///		@TODO
+/// 止損:
+///		@TODO
+/// 反手:
+/// 	1. K線收盤價站上12EMA反手做多
 ///
 
-
-//---------------------------
+///
+/// 確定K線高價回彈 144,169 (距離2%內就算回彈)
+///
+checkBarUnderTunnel() =>
+	cond = array.copy(shortCond)
+	dead144 = array.get(cond, 0)	
+	dead169 = array.get(cond, 1)
+	dead576 = array.get(cond, 2)
+	dead676 = array.get(cond, 3)
+	hadBack = array.get(cond, 4)
+	
+	//1倍跟4倍都死叉..且還沒有K線回彈通道的記錄才進判斷
+	if (((dead144 and dead576) or (dead169 and dead676)) and hadBack == false)
+		if(ema169 < ema144) 
+			//ema169在下..計算K線最高價距離ema169的百分比
+			pec = calcPercent(high, ema169)
+			// label.new(bar_index, low - 100, text=str.tostring(pec))
+			hadBack := (pec < 2) or (high >= ema169)
+		else
+			//ema144在下..計算K線最低價距離ema144的百分比
+			pec = calcPercent(high, ema144)
+			// label.new(bar_index, low - 100, text=str.tostring(pec))
+			hadBack := (pec < 2) or (high >= ema144)
+	
+	//return hadBack
+	hadBack
 
 ///
-/// 
+/// 確定K線收盤價低於EMA12
+///
+checkBelowEma12() =>
+	cond = array.copy(shortCond)
+	hadBack = array.get(cond, 4)
+	res = hadBack == true and close < ema12
+	if (res == true)
+		//低於ema12表示空單條件滿足..清空條件讓下一筆資料重新判斷
+		for i = 0 to 4
+			array.set(shortCond, i, false)
+		//空單條件滿足.設定手上有空單
+		array.set(shortCond, 5, true)
+	
+	//return res
+	res
+
+///
+/// 判斷是否反手做多
+///
+checkBackOrderLong() =>
+	cond = array.copy(shortCond)
+	hadOrder = array.get(cond, 5)
+	res = hadOrder == true and close > ema12
+	if (res == true)
+		//反手做多條件滿足..清掉擁有空單記錄
+		array.set(shortCond, 5, false)	
+	//return
+	res
+
+if ta.crossunder(ema12, ema144)
+	//ema12死叉跌破ema144
+	array.set(shortCond, 0, true)
+	array.set(longCond, 0, false)
+	array.set(longCond, 4, false)
+
+if ta.crossunder(ema12, ema169)
+	//ema12死叉跌破ema144
+	array.set(shortCond, 1, true)
+	array.set(longCond, 1, false)
+	array.set(longCond, 4, false)
+
+if ta.crossunder(ema48, ema576)
+	//ema48死叉跌破 576
+	array.set(shortCond, 2, true)
+	array.set(longCond, 2, false)
+	array.set(longCond, 4, false)
+
+if ta.crossunder(ema48, ema676)
+	//ema48死叉跌破ema676
+	array.set(shortCond, 3, true)
+	array.set(longCond, 3, false)
+	array.set(longCond, 4, false)
+
+array.set(shortCond, 4, checkBarUnderTunnel())
+
+///---------------------------
 /// 標示 警告
-///
-///
+///---------------------------
+orderLong = checkOntoEma12()
+orderShort = checkBelowEma12()
+orderBackLong = checkBackOrderLong()
+
+plotshape(orderLong, style=shape.labelup, location=location.belowbar, size=size.normal, text='多單', title='多單', color=#32CD32, textcolor=color.white)
+plotshape(orderShort, style=shape.labeldown, location=location.abovebar, size=size.normal, text='空單', title='空單', color=#FF1493, textcolor=color.white)
+// plotshape(orderBackLong, style=shape.labelup, location=location.belowbar, size=size.normal, text='反多', title='反手做多', color=#1E90FF, textcolor=color.white)
 
 
-///舊邏輯 ===================
-meme = (ema144 > ema169 and ema12[1] < ema144[1] and ema12 >= ema144 and ema12 >= ema169 and ema12[4] < ema169[4]) or (ema144 < ema169 and ema12[1] < ema169[1] and ema12 >= ema144 and ema12 >= ema169 and ema12[4] < ema144[4])
-meme1 = (ema144 > ema169 and ema12[1] > ema169[1] and ema12 <= ema144 and ema12 <= ema169 and ema12[4] > ema144[4]) or (ema144 < ema169 and ema12[1] > ema144[1] and ema12 <= ema144 and ema12 <= ema169 and ema12[4] > ema169[4])
+alertcondition(orderLong, title='多', message='做多瞜')
+alertcondition(orderShort, title='空', message='做空瞜')
+// alertcondition(orderBackLong, title='反', message='反手做多瞜')
 
-plotshape(meme1, style=shape.labeldown, color=color.new(color.red, 0), location=location.abovebar, size=size.small, text='下', textcolor=color.new(color.white, 0), title='下')
-plotshape(meme, style=shape.labelup, color=color.new(color.green, 0), location=location.belowbar, size=size.small, text='上', textcolor=color.new(color.white, 0), title='上')
 
-// alertcondition(meme1, title='空', message='做空瞜')
+///vages12的邏輯 ===================
+// meme = (ema144 > ema169 and ema12[1] < ema144[1] and ema12 >= ema144 and ema12 >= ema169 and ema12[4] < ema169[4]) or (ema144 < ema169 and ema12[1] < ema169[1] and ema12 >= ema144 and ema12 >= ema169 and ema12[4] < ema144[4])
+// meme1 = (ema144 > ema169 and ema12[1] > ema169[1] and ema12 <= ema144 and ema12 <= ema169 and ema12[4] > ema144[4]) or (ema144 < ema169 and ema12[1] > ema144[1] and ema12 <= ema144 and ema12 <= ema169 and ema12[4] > ema169[4])
+
+// plotshape(meme, style=shape.labelup, color=color.new(color.green, 0), location=location.belowbar, size=size.small, text='上', textcolor=color.new(color.white, 0), title='上')
+// plotshape(meme1, style=shape.labeldown, color=color.new(color.red, 0), location=location.abovebar, size=size.small, text='下', textcolor=color.new(color.white, 0), title='下')
+
 // alertcondition(meme, title='多', message='做多瞜')
+// alertcondition(meme1, title='空', message='做空瞜')
