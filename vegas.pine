@@ -18,14 +18,32 @@ ema12 = ta.ema(src12, len12)
 plot(ema12, title='EMA12', color=color.new(color.red, 0), offset=offset12)
 
 //
-// 基於4倍不逆市..把12EMA的4倍(48EMA)也拉進來
-// 原則上邏輯驗證過後就可以設為透明來隱藏
+// 基於4倍不逆市..把12MA的4倍也拉進來
 // 12 * 4 = 48
 // 144 * 4 = 576
 // 169 * 4 = 676
-//
-ema48 = ta.ema(close, 48)
-plot(ema48, title='EMA48', color=color.new(#FF00FF, 100), offset=offset12, style=plot.style_line) //pink
+// 
+// 4倍时間換算..
+// fourTimes = str.tostring(str.tonumber(timeframe.period) * 4) 
+// 趕羚羊.轉出來的類型是series string, request.security().不吃..
+// 只好苦工switch..
+string fourTimes = switch timeframe.period
+	//15 min * 4
+	"15" => "60"
+	//1 hour = 60 min * 4
+	"60" => "240"
+	//4 hour = 240 min * 4
+	"240" => "960"
+	//1 day = D * 4
+	"D" => "4D"
+	//1 month = M * 4
+	"M" => "4M"
+	//default
+	=> "60"
+
+// 邏輯驗證過後就可以設為透明來隱藏
+ema48 = request.security(syminfo.tickerid, fourTimes, expression=ema12) 
+plot(ema48, title='EMA48', color=color.new(#FF0088, 90), offset=offset12, style=plot.style_line) //pink
 
 //ema144, 169 短期線
 len144 = input.int(144, minval=1, title='Length')
@@ -86,8 +104,7 @@ var longCond = array.new_bool(5, false)
 // 2 => ema576死叉,
 // 3 => ema676死叉,
 // 4 => k線回彈通道
-// 5 => 擁有空單
-var shortCond = array.new_bool(6, false)
+var shortCond = array.new_bool(5, false)
 
 ///
 /// 計算兩個數的差異百分比
@@ -109,29 +126,28 @@ checkBarBackTunnel() =>
 	hadBack = array.get(cond, 4)
 	
 	//1倍跟4倍都金叉..且還沒有K線回踩通道的記錄才進判斷
-	if (((gold144 and gold576) or (gold169 and gold676)) and hadBack == false)
+	if (gold144 and gold576 and gold169 and gold676 and hadBack == false)
 		if(ema144 > ema169) 
 			//ema144在上..計算K線最低價距離ema144的百分比
 			pec = calcPercent(low, ema144)
 			// label.new(bar_index, high + 100, text=str.tostring(pec))
-			hadBack := (pec < 2) or (low <= ema144)
+			hadBack := (pec < 2 and low[0] < low[1]) or (low <= ema144)
 		else
 			//K線在169上..計算K線最低價距離ema169的百分比
 			pec = calcPercent(low, ema169)
 			// label.new(bar_index, high + 100, text=str.tostring(pec))
-			hadBack := (pec < 2) or (low <= ema169)
+			hadBack := (pec < 2 and low[0] < low[1]) or (low <= ema169)
 	
 	//return hadBack
 	hadBack
 
 ///
-/// 確定K線收盤價站上EMA12
+/// 確定K線最低價站上EMA12
 ///
 checkOntoEma12() =>
 	cond = array.copy(longCond)
-	hadBack = array.get(cond, 4)
-	res = hadBack == true and close > ema12
-	if (res == true)
+	res = array.get(cond, 4) and low > ema12 //K線最低價已回踩通道且當前最低價已經高過ema12
+	if res
 		//站上ema12表示多單條件滿足..清空條件讓下一筆資料重新判斷
 		for i = 0 to 4
 			array.set(longCond, i, false)
@@ -147,35 +163,43 @@ checkOntoEma12() =>
 /// 1倍數:
 /// 	1. EMA12金叉突破 144,169
 /// 	2. K線最低價回踩 144,169 (距離2%內就算回踩)
-/// 	3. K線收盤價站上EMA12
+/// 	3. K線最低價站上EMA12
 /// 止盈:
 ///		@TODO
 /// 止損:
 ///		@TODO
 ///
 if ta.crossover(ema12, ema144)
-	//ema12金叉突破ema144
-	array.set(longCond, 0, true)
+	//ema12金叉突破ema144..把空單條件的死叉取消..
 	array.set(shortCond, 0, false)
 	array.set(shortCond, 4, false)
+	
+	array.set(longCond, 0, true)
 
 if ta.crossover(ema12, ema169)
-	//ema12金叉突破ema144
-	array.set(longCond, 1, true)
+	//ema12金叉突破ema169..把空單條件的死叉取消..
 	array.set(shortCond, 1, false)
 	array.set(shortCond, 4, false)
+	
+	array.set(longCond, 1, true)
 
 if ta.crossover(ema48, ema576)
-	//ema48金叉突破 576
-	array.set(longCond, 2, true)
+	//ema48金叉突破 576..把空單條件的死叉取消..
 	array.set(shortCond, 2, false)
 	array.set(shortCond, 4, false)
+	
+	if array.get(longCond, 0)
+		//ema576屬4倍級別..所以ema144必須已經金叉才符合4倍不逆勢
+		array.set(longCond, 2, true)
 
 if ta.crossover(ema48, ema676)
-	//ema48金叉突破ema676
-	array.set(longCond, 3, true)
+	//ema48金叉突破ema676..把空單條件的死叉取消..
 	array.set(shortCond, 3, false)
 	array.set(shortCond, 4, false)
+	
+	if array.get(longCond, 1)
+		//ema676屬4倍級別..所以ema169必須已經金叉才符合4倍不逆勢
+		array.set(longCond, 3, true)
 
 array.set(longCond, 4, checkBarBackTunnel())
 
@@ -193,12 +217,10 @@ array.set(longCond, 4, checkBarBackTunnel())
 ///		@TODO
 /// 止損:
 ///		@TODO
-/// 反手:
-/// 	1. K線收盤價站上12EMA反手做多
 ///
 
 ///
-/// 確定K線高價回彈 144,169 (距離2%內就算回彈)
+/// 確定K線最高價回彈 144,169 (距離2%內就算回彈)
 ///
 checkBarUnderTunnel() =>
 	cond = array.copy(shortCond)
@@ -209,17 +231,17 @@ checkBarUnderTunnel() =>
 	hadBack = array.get(cond, 4)
 	
 	//1倍跟4倍都死叉..且還沒有K線回彈通道的記錄才進判斷
-	if (((dead144 and dead576) or (dead169 and dead676)) and hadBack == false)
+	if (dead144 and dead576 and dead169 and dead676 and hadBack == false)
 		if(ema169 < ema144) 
 			//ema169在下..計算K線最高價距離ema169的百分比
 			pec = calcPercent(high, ema169)
 			// label.new(bar_index, low - 100, text=str.tostring(pec))
-			hadBack := (pec < 2) or (high >= ema169)
+			hadBack := (pec < 2 and high[0] > high[1]) or (high >= ema169)
 		else
 			//ema144在下..計算K線最低價距離ema144的百分比
 			pec = calcPercent(high, ema144)
 			// label.new(bar_index, low - 100, text=str.tostring(pec))
-			hadBack := (pec < 2) or (high >= ema144)
+			hadBack := (pec < 2 and high[0] > high[1]) or (high >= ema144)
 	
 	//return hadBack
 	hadBack
@@ -229,54 +251,46 @@ checkBarUnderTunnel() =>
 ///
 checkBelowEma12() =>
 	cond = array.copy(shortCond)
-	hadBack = array.get(cond, 4)
-	res = hadBack == true and close < ema12
-	if (res == true)
+	res = array.get(cond, 4) and high < ema12 //K線最高價已經回彈通道且最當前高價低於ema12
+	if res
 		//低於ema12表示空單條件滿足..清空條件讓下一筆資料重新判斷
 		for i = 0 to 4
 			array.set(shortCond, i, false)
-		//空單條件滿足.設定手上有空單
-		array.set(shortCond, 5, true)
-	
 	//return res
 	res
 
-///
-/// 判斷是否反手做多
-///
-checkBackOrderLong() =>
-	cond = array.copy(shortCond)
-	hadOrder = array.get(cond, 5)
-	res = hadOrder == true and close > ema12
-	if (res == true)
-		//反手做多條件滿足..清掉擁有空單記錄
-		array.set(shortCond, 5, false)	
-	//return
-	res
 
 if ta.crossunder(ema12, ema144)
-	//ema12死叉跌破ema144
-	array.set(shortCond, 0, true)
+	//ema12死叉跌破ema144..把多單條件的金叉取消..
 	array.set(longCond, 0, false)
 	array.set(longCond, 4, false)
+	
+	array.set(shortCond, 0, true)
 
 if ta.crossunder(ema12, ema169)
-	//ema12死叉跌破ema144
-	array.set(shortCond, 1, true)
+	//ema12死叉跌破ema169..把多單條件的金叉取消..
 	array.set(longCond, 1, false)
 	array.set(longCond, 4, false)
+	
+	array.set(shortCond, 1, true)
 
 if ta.crossunder(ema48, ema576)
-	//ema48死叉跌破 576
-	array.set(shortCond, 2, true)
+	//ema48死叉跌破 576..把多單條件的金叉取消..
 	array.set(longCond, 2, false)
 	array.set(longCond, 4, false)
+	
+	if array.get(shortCond, 0)
+		//ema576屬4倍級別..所以ema144必須已經死叉才符合4倍不逆勢
+		array.set(shortCond, 2, true)
 
 if ta.crossunder(ema48, ema676)
-	//ema48死叉跌破ema676
-	array.set(shortCond, 3, true)
+	//ema48死叉跌破ema676..把多單條件的金叉取消..
 	array.set(longCond, 3, false)
 	array.set(longCond, 4, false)
+	
+	if array.get(shortCond, 1)
+		//ema676屬4倍級別..所以ema169必須已經死叉才符合4倍不逆勢
+		array.set(shortCond, 3, true)
 
 array.set(shortCond, 4, checkBarUnderTunnel())
 
@@ -285,16 +299,12 @@ array.set(shortCond, 4, checkBarUnderTunnel())
 ///---------------------------
 orderLong = checkOntoEma12()
 orderShort = checkBelowEma12()
-orderBackLong = checkBackOrderLong()
 
 plotshape(orderLong, style=shape.labelup, location=location.belowbar, size=size.normal, text='多單', title='多單', color=#32CD32, textcolor=color.white)
 plotshape(orderShort, style=shape.labeldown, location=location.abovebar, size=size.normal, text='空單', title='空單', color=#FF1493, textcolor=color.white)
-// plotshape(orderBackLong, style=shape.labelup, location=location.belowbar, size=size.normal, text='反多', title='反手做多', color=#1E90FF, textcolor=color.white)
-
 
 alertcondition(orderLong, title='多', message='做多瞜')
 alertcondition(orderShort, title='空', message='做空瞜')
-// alertcondition(orderBackLong, title='反', message='反手做多瞜')
 
 
 ///vages12的邏輯 ===================
