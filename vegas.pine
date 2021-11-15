@@ -26,8 +26,7 @@ plot(ema12, title='EMA12', color=color.new(color.red, 0), offset=offset12)
 // 12 * 4 = 48
 // 144 * 4 = 576
 // 169 * 4 = 676
-// 
-// 4倍时間換算..
+// 4倍时間換算
 // fourTimes = str.tostring(str.tonumber(timeframe.period) * 4) 
 // 趕羚羊.轉出來的類型是series string, request.security().不吃..
 // 只好苦工switch..
@@ -116,6 +115,8 @@ plot(ema676, title='EMA676', color=color.new(color.lime, 0), offset=offset676)
 ///		@TODO
 /// --------------------------------------
 
+///------ variables --------------
+
 // 均線交叉陣列..
 // key: 0 => ema144, 1 => ema169, 2 => ema576, 3 => ema676 
 // value: 0 => initial, 1 => 金叉, 2 => 死叉
@@ -126,6 +127,9 @@ var lineCross = array.new_int(4, 0)
 // value: 0 => initial, 1 => 多單回踩, 2 => 空單回踩
 var lineBack = array.new_int(1, 0)
 
+
+///---- functions -------------
+
 ///
 /// 計算兩個數的差異百分比
 ///
@@ -133,6 +137,52 @@ calcPercent(num1, num2) =>
 	pec = (math.abs(num1 - num2) / num2 ) * 100
     pec
 
+///
+/// 檢查K線是否為十字星
+/// ref: 內建指標->十字星
+/// @return bool
+checkIsDoji() =>
+	C_ShadowPercent = 5.0 // size of shadows
+	C_ShadowEqualsPercent = 100.0
+	C_DojiBodyPercent = 5.0
+	C_BodyHi = math.max(close, open)
+	C_BodyLo = math.min(close, open)
+	C_Body = C_BodyHi - C_BodyLo
+	C_UpShadow = high - C_BodyHi
+	C_DnShadow = C_BodyLo - low
+	C_HasUpShadow = C_UpShadow > C_ShadowPercent / 100 * C_Body
+	C_HasDnShadow = C_DnShadow > C_ShadowPercent / 100 * C_Body
+	C_Range = high-low
+	C_BodyMiddle = C_Body / 2 + C_BodyLo
+	C_ShadowEquals = C_UpShadow == C_DnShadow or (math.abs(C_UpShadow - C_DnShadow) / C_DnShadow * 100) < C_ShadowEqualsPercent and (math.abs(C_DnShadow - C_UpShadow) / C_UpShadow * 100) < C_ShadowEqualsPercent
+	C_IsDojiBody = C_Range > 0 and C_Body <= C_Range * C_DojiBodyPercent / 100
+	C_Doji = C_IsDojiBody and C_ShadowEquals
+
+	patternLabelPosLow = low - (ta.atr(30) * 0.6)
+	C_DragonflyDoji = C_IsDojiBody and C_UpShadow <= C_Body
+	C_GravestoneDojiOne = C_IsDojiBody and C_DnShadow <= C_Body
+
+	isDoji = C_Doji and not C_DragonflyDoji and not C_GravestoneDojiOne	
+	if debug and isDoji
+		label.new(bar_index, patternLabelPosLow, text="十", style=label.style_label_up, color=color.blue, textcolor=color.white)
+
+	isDoji
+
+///
+/// 檢查K線是否為短實體
+/// @return bool
+///
+checkIsShortBody() =>
+	C_BodyHi = math.max(close, open) 
+	C_BodyLo = math.min(close, open)
+	isShort = calcPercent(C_BodyHi, C_BodyLo) <= 0.2
+	
+	patternLabelPosLow = low - (ta.atr(30) * 0.6)
+
+	if debug and isShort
+		label.new(bar_index, patternLabelPosLow, text="短", style=label.style_label_up, color=#1E90FF, textcolor=color.white)
+
+	isShort
 
 ///
 /// 確定K線最低價回踩 144,169 (距離2%內就算回踩)
@@ -210,6 +260,8 @@ checkBarBackEma12() =>
 	//return res
 	res
 
+
+///--- logic ----------
 
 if ta.crossover(ema12, ema144)
 	//ema12金叉突破ema144
