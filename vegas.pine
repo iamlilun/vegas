@@ -154,14 +154,14 @@ checkBarBackTunnel() =>
 				//ema144在上..計算K線最低價距離ema144的百分比
 				pec = calcPercent(low, ema144)
 				if (pec < 2) or (low <= ema144)
-					label.new(debug ? bar_index : na, high + 100, text="多回踩" + str.tostring(pec) + "%", color=#01814A)
+					label.new(debug ? bar_index : na, high + 100, text="多回踩" + str.tostring(pec) + "%", color=#01814A, textcolor=color.white)
 					back := 1 
 			else
 				//ema169在上..計算K線最低價距離ema169的百分比
 				pec = calcPercent(low, ema169)
 				// label.new(bar_index, high + 100, text=str.tostring(pec))
 				if (pec < 2) or (low <= ema169)
-					label.new(debug ? bar_index : na, high + 100, text="多回踩" + str.tostring(pec) + "%", color=#01814A)
+					label.new(debug ? bar_index : na, high + 100, text="多回踩" + str.tostring(pec) + "%", color=#01814A, textcolor=color.white)
 					back := 1
 		
 	//空單回踩邏輯
@@ -173,13 +173,13 @@ checkBarBackTunnel() =>
 				//ema169在下.計算K線最高價距離ema169的百分比
 				pec = calcPercent(high, ema169)
 				if (pec < 2) or (high >= ema169)
-					label.new(debug ? bar_index : na, low + 100, text="空回彈" + str.tostring(pec) + "%", color=#CE0000)
+					label.new(debug ? bar_index : na, low + 100, text="空回彈" + str.tostring(pec) + "%", color=#CE0000, textcolor=color.white)
 					back := 2 
 			else
 				//ema144在下.計算K線最高價距離ema144的百分比
 				pec = calcPercent(high, ema144)
 				if (pec < 2) or (high >= ema144)
-					label.new(debug ? bar_index : na, low + 100, text="空回彈" + str.tostring(pec) + "%", color=#CE0000)
+					label.new(debug ? bar_index : na, low + 100, text="空回彈" + str.tostring(pec) + "%", color=#CE0000, textcolor=color.white)
 					back := 2
 
 	//return back
@@ -213,49 +213,49 @@ checkBarBackEma12() =>
 
 if ta.crossover(ema12, ema144)
 	//ema12金叉突破ema144
-	label.new(debug ? bar_index : na, high + 100, text="金叉", color=#FFD306)
+	label.new(debug ? bar_index : na, high + 100, text="144金叉", color=#FFD306)
 	array.set(lineBack, 0, 0)
 	array.set(lineCross, 0, 1)
 
 if ta.crossover(ema12, ema169)
 	//ema12金叉突破ema169
-	label.new(debug ? bar_index : na, high + 100, text="金叉", color=#FFD306)
+	label.new(debug ? bar_index : na, high + 100, text="169金叉", color=#FFD306)
 	array.set(lineBack, 0, 0)
 	array.set(lineCross, 1, 1)
 
 if ta.crossover(ema48, ema576)
 	//ema48金叉突破ema576
-	label.new(debug ? bar_index : na, high + 100, text="四倍金叉", color=#FFD306)
+	label.new(debug ? bar_index : na, high + 100, text="576金叉", color=#FFF0AC)
 	array.set(lineBack, 0, 0)
 	array.set(lineCross, 2, 1)
 
 if ta.crossover(ema48, ema676)
 	//ema48金叉突破ema676
-	label.new(debug ? bar_index : na, high + 100, text="四倍金叉", color=#FFD306)
+	label.new(debug ? bar_index : na, high + 100, text="676金叉", color=#FFF0AC)
 	array.set(lineBack, 0, 0)
 	array.set(lineCross, 3, 1)
 
 if ta.crossunder(ema12, ema144)
 	//ema12死叉跌破ema144
-	label.new(debug ? bar_index : na, high + 100, text="死叉", color=#8E8E8E)
+	label.new(debug ? bar_index : na, high + 100, text="144死叉", color=#8E8E8E)
 	array.set(lineBack, 0, 0)
 	array.set(lineCross, 0, 2)
 
 if ta.crossunder(ema12, ema169)
 	//ema12死叉跌破ema169
-	label.new(debug ? bar_index : na, high + 100, text="死叉", color=#8E8E8E)
+	label.new(debug ? bar_index : na, high + 100, text="169死叉", color=#8E8E8E)
 	array.set(lineBack, 0, 0)
 	array.set(lineCross, 1, 2)
 	
 if ta.crossunder(ema48, ema576)
 	//ema48死叉跌破ema576
-	label.new(debug ? bar_index : na, high + 100, text="四倍死叉", color=#8E8E8E)
+	label.new(debug ? bar_index : na, high + 100, text="576死叉", color=#D0D0D0)
 	array.set(lineBack, 0, 0)
 	array.set(lineCross, 2, 2)
 
 if ta.crossunder(ema48, ema676)
 	//ema48死叉跌破ema676.
-	label.new(debug ? bar_index : na, high + 100, text="四倍死叉", color=#8E8E8E)
+	label.new(debug ? bar_index : na, high + 100, text="676死叉", color=#D0D0D0)
 	array.set(lineBack, 0, 0)
 	array.set(lineCross, 3, 2)
 
