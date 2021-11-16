@@ -7,7 +7,12 @@ indicator(title='vegas改', shorttitle='vegas改', overlay=true, max_labels_coun
 
 
 //show debug data label
-var debug = true
+dCross = input.bool(defval=false, title="顯示交叉", group="Debug")
+dEMA48 = input.bool(defval=false, title="顯示EMA48", group="Debug")
+dDojiShort = input.bool(defval=false, title="顯示十字或短實體", group="Debug")
+dBackTunnel = input.bool(defval=false, title="顯示回踩均線", group="Debug")
+dBackEMA12 = input.bool(defval=false, title="顯示返回EMA12", group="Debug")
+
 
 /// -------------------------------------------
 /// 準備均線數據..
@@ -46,7 +51,7 @@ string fourTimes = switch timeframe.period
 
 // 邏輯驗證過後就可以設為透明來隱藏
 ema48 = request.security(syminfo.tickerid, fourTimes, expression=ema12) 
-plot(ema48, title='EMA48', color=color.new(#FF0088, debug ? 0 : 100), offset=offset12, style=plot.style_line) //pink
+plot(ema48, title='EMA48', color=color.new(#FF0088, dEMA48 ? 0 : 100), offset=offset12, style=plot.style_line) //pink
 
 //ema144, 169 短期線
 len144 = input.int(144, minval=1, title='Length')
@@ -122,16 +127,22 @@ plot(ema676, title='EMA676', color=color.new(color.lime, 0), offset=offset676)
 // value: 0 => initial, 1 => 金叉, 2 => 死叉
 var lineCross = array.new_int(4, 0)
 
-// 均線回踩通道陣列..
+// 回踩通道陣列
 // key: 只有一個..但用array才能copy出來做判斷..如果只用變數會造成判斷污染
 // value: 0 => initial, 1 => 多單回踩, 2 => 空單回踩
-var lineBack = array.new_int(1, 0)
+var backTunnel = array.new_int(1, 0)
+
+// K線返回12EMA
+// key: 0 => 多單記錄位置, 1 => 空單記錄位置
+// value: 0 => initial, 1 => 正常線形, 2 => 十字星, 3 => 短實體, 4 => 下單條件達成
+var back12EMA = array.new_int(2, 0)
 
 
 ///---- functions -------------
 
 ///
 /// 計算兩個數的差異百分比
+/// @returns {float}: 差異百分比
 ///
 calcPercent(num1, num2) =>
 	pec = (math.abs(num1 - num2) / num2 ) * 100
@@ -140,7 +151,8 @@ calcPercent(num1, num2) =>
 ///
 /// 檢查K線是否為十字星
 /// ref: 內建指標->十字星
-/// @return bool
+/// @returns {boolean}: true => 十字星, false => 非十字星 
+///
 checkIsDoji() =>
 	C_ShadowPercent = 5.0 // size of shadows
 	C_ShadowEqualsPercent = 100.0
@@ -158,42 +170,33 @@ checkIsDoji() =>
 	C_IsDojiBody = C_Range > 0 and C_Body <= C_Range * C_DojiBodyPercent / 100
 	C_Doji = C_IsDojiBody and C_ShadowEquals
 
-	patternLabelPosLow = low - (ta.atr(30) * 0.6)
 	C_DragonflyDoji = C_IsDojiBody and C_UpShadow <= C_Body
 	C_GravestoneDojiOne = C_IsDojiBody and C_DnShadow <= C_Body
 
 	isDoji = C_Doji and not C_DragonflyDoji and not C_GravestoneDojiOne	
-	if debug and isDoji
-		label.new(bar_index, patternLabelPosLow, text="十", style=label.style_label_up, color=color.blue, textcolor=color.white)
-
 	isDoji
 
 ///
 /// 檢查K線是否為短實體
-/// @return bool
+/// @returns {boolean}: true => 短實體, false => 非短實體
 ///
 checkIsShortBody() =>
 	C_BodyHi = math.max(close, open) 
 	C_BodyLo = math.min(close, open)
 	isShort = calcPercent(C_BodyHi, C_BodyLo) <= 0.2
-	
-	patternLabelPosLow = low - (ta.atr(30) * 0.6)
-
-	if debug and isShort
-		label.new(bar_index, patternLabelPosLow, text="短", style=label.style_label_up, color=#1E90FF, textcolor=color.white)
-
 	isShort
 
 ///
 /// 確定K線最低價回踩 144,169 (距離2%內就算回踩)
+/// @retruns {number}: 0 => 沒回踩, 1 => 多單回踩, 2 => 空單回踩 
 ///
-checkBarBackTunnel() =>
+checkBackTunnel() =>
 	gold144 = array.get(lineCross, 0)
 	gold169 = array.get(lineCross, 1)
 	gold576 = array.get(lineCross, 2)
 	gold676 = array.get(lineCross, 3)
 
-	back = array.get(lineBack, 0)
+	back = array.get(backTunnel, 0)
 	
 	//多單回踩邏輯
 	//1倍跟4倍均線都金叉.且還沒有K線回踩通道的記錄..
@@ -204,14 +207,14 @@ checkBarBackTunnel() =>
 				//ema144在上..計算K線最低價距離ema144的百分比
 				pec = calcPercent(low, ema144)
 				if (pec < 2) or (low <= ema144)
-					label.new(debug ? bar_index : na, high + 100, text="多回踩" + str.tostring(pec) + "%", color=#01814A, textcolor=color.white)
+					label.new(dBackTunnel ? bar_index : na, high + 100, text="多回踩" + str.tostring(pec) + "%", color=#01814A, textcolor=color.white)
 					back := 1 
 			else
 				//ema169在上..計算K線最低價距離ema169的百分比
 				pec = calcPercent(low, ema169)
 				// label.new(bar_index, high + 100, text=str.tostring(pec))
 				if (pec < 2) or (low <= ema169)
-					label.new(debug ? bar_index : na, high + 100, text="多回踩" + str.tostring(pec) + "%", color=#01814A, textcolor=color.white)
+					label.new(dBackTunnel ? bar_index : na, high + 100, text="多回踩" + str.tostring(pec) + "%", color=#01814A, textcolor=color.white)
 					back := 1
 		
 	//空單回踩邏輯
@@ -223,106 +226,217 @@ checkBarBackTunnel() =>
 				//ema169在下.計算K線最高價距離ema169的百分比
 				pec = calcPercent(high, ema169)
 				if (pec < 2) or (high >= ema169)
-					label.new(debug ? bar_index : na, low + 100, text="空回彈" + str.tostring(pec) + "%", color=#CE0000, textcolor=color.white)
+					label.new(dBackTunnel ? bar_index : na, low - 100, text="空回彈" + str.tostring(pec) + "%", color=#CE0000, textcolor=color.white, style=label.style_label_up)
 					back := 2 
 			else
 				//ema144在下.計算K線最高價距離ema144的百分比
 				pec = calcPercent(high, ema144)
 				if (pec < 2) or (high >= ema144)
-					label.new(debug ? bar_index : na, low + 100, text="空回彈" + str.tostring(pec) + "%", color=#CE0000, textcolor=color.white)
+					label.new(dBackTunnel ? bar_index : na, low - 100, text="空回彈" + str.tostring(pec) + "%", color=#CE0000, textcolor=color.white, style=label.style_label_up)
 					back := 2
+
+	array.set(backTunnel, 0, back) //結果寫入陣列
 
 	//return back
 	back
 
 ///
 /// 確定K線回到EMA12
+/// @returns {number}: 0 => 沒回踩, 1 => 多單回踩, 2 => 空單回踩
 ///
 checkBarBackEma12() =>
-	back = array.get(lineBack, 0)
-	res = 0
-	
-	if (back == 1 and open > ema12 and close > ema12)
-		//多單已回踩均線..開盤和收盤要高於ema12
-		res := 1
+	order = array.get(backTunnel, 0)
+	// key: 0 => 多單記錄位置, 1 => 空單記錄位置
+	// value: 0 => initial, 1 => 正常線形, 2 => 十字星, 3 => 短實體, 4 => 下單條件達成
+	// var back12EMA = array.new_int(2, 0)
+	back = 0
+	if order == 1
+		//多單判斷
+		status = array.get(back12EMA, 0)
+		back := switch status
+			//0代表第一次判斷..
+			0 => 
+				res = open > ema12 and close > ema12 ? 1 : status
+				if res == 1
+					label.new(dBackEMA12 ? bar_index : na, high + 50, text="第1根", color=#02DF82, textcolor=color.white)
+				res
+			//1代表正常線型返回ema12..判斷是否是十字星還是短實體.如果是正常線形就滿足下單條件
+			1 => 
+				if open >= ema12 and close >= ema12
+					res = checkIsDoji() ? 2 :
+					   checkIsShortBody() ? 3 : 4
 
-	if (back == 2 and open < ema12 and close < ema12)
-		//空單已回踩均線..開盤和收盤要低於ema12
-		res := 2
+					msg = switch res
+						2 => '十字星'
+						3 => '短實體'
+						4 => '第2根'
+					label.new(dBackEMA12 ? bar_index : na, high + 50, text=msg, color=#02DF82, textcolor=color.white)
+					res
+			//3代表是十字星..判斷收盤價是否高於前一根
+			2 => 
+				res = close > close[1] ? 4 : 1
+				msg = switch res
+					1 => '重新判斷'
+					4 => '第2根'
+				label.new(dBackEMA12 ? bar_index : na, high + 50, text=msg, color=#02DF82, textcolor=color.white)
+				res
+			3 => 
+				res = close > ema12 ? 4 : 1
+				msg = switch res
+					1 => '重新判斷'
+					4 => '第2根'
+				label.new(dBackEMA12 ? bar_index : na, high + 50, text=msg, color=#02DF82, textcolor=color.white)
+				res
 
-	if res > 0 
-		//res > 0 表示下單條件滿足..清空條件讓下一筆資料重新判斷
+			=> status
+
+		array.set(back12EMA, 0, back) //結果寫入陣列
+
+	if order == 2
+		//空單判斷
+		status = array.get(back12EMA, 1)
+		back := switch status
+			//0代表第一次判斷..
+			0 => 
+				res = open < ema12 and close < ema12 ? 1 : status
+				if res == 1
+					label.new(dBackEMA12 ? bar_index : na, low - 50, text="第1根", color=#BF0060, textcolor=color.white, style=label.style_label_up)
+				res
+			//1代表正常線型返回ema12..判斷是否是十字星還是短實體.如果是正常線形就滿足下單條件
+			1 => 
+				if open <= ema12 and close <= ema12
+					res = checkIsDoji() ? 2 :
+					   checkIsShortBody() ? 3 : 4
+					
+					msg = switch res
+						2 => '十字星'
+						3 => '短實體'
+						4 => '第2根'
+
+					label.new(dBackEMA12 ? bar_index : na, low - 50, text=msg, color=#BF0060, textcolor=color.white, style=label.style_label_up)
+					res
+			//3代表是十字星..判斷收盤價是否低於前一根
+			2 => 
+				res = close < close[1] ? 4 : 1
+				msg = switch res
+					1 => '重新判斷'
+					4 => '第2根'
+				label.new(dBackEMA12 ? bar_index : na, low - 50, text=msg, color=#BF0060, textcolor=color.white, style=label.style_label_up)
+				res
+			//4代表短實體..判斷收盤價是否低於ema12
+			3 => 
+				res = close < ema12 ? 4 : 1
+				msg = switch res
+					1 => '重新判斷'
+					4 => '第2根'
+				label.new(dBackEMA12 ? bar_index : na, low - 50, text=msg, color=#BF0060, textcolor=color.white, style=label.style_label_up)
+				res
+			=> status
+
+		array.set(back12EMA, 1, back) //結果寫入陣列
+
+	back
+
+		
+
+///
+/// 判斷是否滿足下單條件..
+/// returns {number}: 0 => 未滿足, 1 => 多單, 2空單
+/// 
+///
+verifyOrder() =>
+	order = array.get(backTunnel, 0)
+	res = switch order
+		1 => array.get(back12EMA, 0) == 4 ? 1 : 0
+		2 => array.get(back12EMA, 1) == 4 ? 2 : 0
+		=> 0
+
+	if res > 0
+	// 下單條件滿足..清空條件讓下一筆資料重新判斷
 		for i = 0 to 3
 			array.set(lineCross, i, 0)
-		
-		array.set(lineBack, 0, 0)
-	
-	//return res
+			if i < 2
+				array.set(back12EMA, i, 0)
+		array.set(backTunnel, 0, 0)
+
 	res
 
-
-///--- logic ----------
+///-------- logic ----------
 
 if ta.crossover(ema12, ema144)
 	//ema12金叉突破ema144
-	label.new(debug ? bar_index : na, high + 100, text="144金叉", color=#FFD306)
-	array.set(lineBack, 0, 0)
+	label.new(dCross ? bar_index : na, high + 100, text="144金叉", color=#FFD306)
+	array.set(backTunnel, 0, 0)
+	array.set(back12EMA, 1, 0)
 	array.set(lineCross, 0, 1)
 
 if ta.crossover(ema12, ema169)
 	//ema12金叉突破ema169
-	label.new(debug ? bar_index : na, high + 100, text="169金叉", color=#FFD306)
-	array.set(lineBack, 0, 0)
+	label.new(dCross ? bar_index : na, high + 100, text="169金叉", color=#FFD306)
+	array.set(backTunnel, 0, 0)
+	array.set(back12EMA, 1, 0)
 	array.set(lineCross, 1, 1)
 
 if ta.crossover(ema48, ema576)
 	//ema48金叉突破ema576
-	label.new(debug ? bar_index : na, high + 100, text="576金叉", color=#FFF0AC)
-	array.set(lineBack, 0, 0)
+	label.new(dCross ? bar_index : na, high + 100, text="576金叉", color=#FFF0AC)
+	array.set(backTunnel, 0, 0)
+	array.set(back12EMA, 1, 0)
 	array.set(lineCross, 2, 1)
 
 if ta.crossover(ema48, ema676)
 	//ema48金叉突破ema676
-	label.new(debug ? bar_index : na, high + 100, text="676金叉", color=#FFF0AC)
-	array.set(lineBack, 0, 0)
+	label.new(dCross ? bar_index : na, high + 100, text="676金叉", color=#FFF0AC)
+	array.set(backTunnel, 0, 0)
+	array.set(back12EMA, 1, 0)
 	array.set(lineCross, 3, 1)
 
 if ta.crossunder(ema12, ema144)
 	//ema12死叉跌破ema144
-	label.new(debug ? bar_index : na, high + 100, text="144死叉", color=#8E8E8E)
-	array.set(lineBack, 0, 0)
+	label.new(dCross ? bar_index : na, high + 100, text="144死叉", color=#8E8E8E)
+	array.set(backTunnel, 0, 0)
+	array.set(back12EMA, 0, 0)
 	array.set(lineCross, 0, 2)
 
 if ta.crossunder(ema12, ema169)
 	//ema12死叉跌破ema169
-	label.new(debug ? bar_index : na, high + 100, text="169死叉", color=#8E8E8E)
-	array.set(lineBack, 0, 0)
+	label.new(dCross ? bar_index : na, high + 100, text="169死叉", color=#8E8E8E)
+	array.set(backTunnel, 0, 0)
+	array.set(back12EMA, 0, 0)
 	array.set(lineCross, 1, 2)
 	
 if ta.crossunder(ema48, ema576)
 	//ema48死叉跌破ema576
-	label.new(debug ? bar_index : na, high + 100, text="576死叉", color=#D0D0D0)
-	array.set(lineBack, 0, 0)
+	label.new(dCross ? bar_index : na, high + 100, text="576死叉", color=#D0D0D0)
+	array.set(backTunnel, 0, 0)
+	array.set(back12EMA, 0, 0)
 	array.set(lineCross, 2, 2)
 
 if ta.crossunder(ema48, ema676)
 	//ema48死叉跌破ema676.
-	label.new(debug ? bar_index : na, high + 100, text="676死叉", color=#D0D0D0)
-	array.set(lineBack, 0, 0)
+	label.new(dCross ? bar_index : na, high + 100, text="676死叉", color=#D0D0D0)
+	array.set(backTunnel, 0, 0)
+	array.set(back12EMA, 0, 0)
 	array.set(lineCross, 3, 2)
 
-array.set(lineBack, 0, checkBarBackTunnel())
-order = checkBarBackEma12()
+checkBackTunnel()
+checkBarBackEma12()
+order = verifyOrder()
+
 
 ///---------------------------
-/// 標示 警告
+/// 下單標示
 ///---------------------------
-
 plotshape(order == 1, style=shape.labelup, location=location.belowbar, size=size.normal, text='多單', title='多單', color=#32CD32, textcolor=color.white)
 plotshape(order == 2, style=shape.labeldown, location=location.abovebar, size=size.normal, text='空單', title='空單', color=#FF1493, textcolor=color.white)
 
-alertcondition(order == 1, title='多', message='做多瞜')
-alertcondition(order == 2, title='空', message='做空瞜')
+
+/// ----------------------
+/// 傳送通知
+/// ----------------------
+
+alertcondition(order == 1, title='Veges-多單通知', message='Veges 做多囉')
+alertcondition(order == 2, title='Veges-空單通知', message='Veges 做空囉')
 
 
 ///vages12的邏輯 ===================
