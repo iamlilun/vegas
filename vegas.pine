@@ -122,21 +122,26 @@ plot(ema676, title='EMA676', color=color.new(color.lime, 0), offset=offset676)
 
 ///------ variables --------------
 
-// 均線交叉陣列..
+// 均線交叉記錄
 // key: 0 => ema144, 1 => ema169, 2 => ema576, 3 => ema676 
 // value: 0 => initial, 1 => 金叉, 2 => 死叉
 var lineCross = array.new_int(4, 0)
 
-// 回踩通道陣列
+// 回踩通道記錄
 // key: 只有一個..但用array才能copy出來做判斷..如果只用變數會造成判斷污染
-// value: 0 => initial, 1 => 多單回踩, 2 => 空單回踩
+// value: 0 => initial, 1 => 多單回踩, 2 => 空單回踩, 3 => 免判斷直接多單, 4 => 免判斷直接空單
 var backTunnel = array.new_int(1, 0)
 
-// K線返回12EMA
+// K線返回12EMA記錄
 // key: 0 => 多單記錄位置, 1 => 空單記錄位置
 // value: 0 => initial, 1 => 正常線形, 2 => 十字星, 3 => 短實體, 4 => 下單條件達成
 var back12EMA = array.new_int(2, 0)
 
+
+// 最後一筆持倉記錄
+// key: 只有一個..但用array才能copy出來做判斷..如果只用變數會造成判斷污染
+// value: 0 => initial, 1 => 多單, 2 => 空單
+var lastPosition = array.new_int(1, 0)
 
 ///---- functions -------------
 
@@ -196,43 +201,50 @@ checkBackTunnel() =>
 	gold576 = array.get(lineCross, 2)
 	gold676 = array.get(lineCross, 3)
 
+	lastPos = array.get(lastPosition, 0)
 	back = array.get(backTunnel, 0)
 	
 	//多單回踩邏輯
-	//1倍跟4倍均線都金叉.且還沒有K線回踩通道的記錄..
-	if (gold144 == 1 and gold576 == 1 and gold169 == 1 and gold676 == 1 and back != 1)
-		if(open < ema12 and close < open) 
-			// 陰線實體開盤低於ema12
+	if gold144 == 1 and gold169 == 1 and lastPos == 1
+		//上一筆資料持有多單且15分金叉直接下單
+		back := 3
+	else if gold144 == 1 and gold576 == 1 and gold169 == 1 and gold676 == 1 and back != 1
+		//1倍跟4倍均線都金叉..還沒有K線回踩通道的記錄.
+		if open < ema12 and close < open
+			//..陰線實體開盤低於ema12
 			if(ema144 > ema169) 
 				//ema144在上..計算K線最低價距離ema144的百分比
 				pec = calcPercent(low, ema144)
 				if (pec < 2) or (low <= ema144)
-					label.new(dBackTunnel ? bar_index : na, high + 100, text="多回踩" + str.tostring(pec) + "%", color=#01814A, textcolor=color.white)
+					label.new(dBackTunnel ? bar_index : na, high + 100, text="多回踩" + str.tostring(pec) + "%", color=#005757, textcolor=color.white)
 					back := 1 
 			else
 				//ema169在上..計算K線最低價距離ema169的百分比
 				pec = calcPercent(low, ema169)
 				// label.new(bar_index, high + 100, text=str.tostring(pec))
 				if (pec < 2) or (low <= ema169)
-					label.new(dBackTunnel ? bar_index : na, high + 100, text="多回踩" + str.tostring(pec) + "%", color=#01814A, textcolor=color.white)
+					label.new(dBackTunnel ? bar_index : na, high + 100, text="多回踩" + str.tostring(pec) + "%", color=#005757, textcolor=color.white)
 					back := 1
 		
 	//空單回踩邏輯
-	//1倍跟4倍均線都死叉.且還沒有K線回踩通道的記錄.
-	if (gold144 == 2 and gold576 == 2 and gold169 == 2 and gold676 == 2 and back != 2)
-		if(open > ema12 and close > open) 
-			// 陽線實體開盤高於ema12
+	if gold144 == 2 and gold169 == 2 and lastPos == 2
+		//上一筆資料持有空單15分死叉直接下單
+		back := 4
+	else if gold144 == 2 and gold576 == 2 and gold169 == 2 and gold676 == 2 and back != 2
+		//1倍跟4倍均線都死叉.且還沒有K線回踩通道的記錄
+		if open > ema12 and close > open
+			//陽線實體開盤高於ema12
 			if(ema144 > ema169) 
 				//ema169在下.計算K線最高價距離ema169的百分比
 				pec = calcPercent(high, ema169)
 				if (pec < 2) or (high >= ema169)
-					label.new(dBackTunnel ? bar_index : na, low - 100, text="空回彈" + str.tostring(pec) + "%", color=#CE0000, textcolor=color.white, style=label.style_label_up)
+					label.new(dBackTunnel ? bar_index : na, low - 100, text="空回彈" + str.tostring(pec) + "%", color=#600030, textcolor=color.white, style=label.style_label_up)
 					back := 2 
 			else
 				//ema144在下.計算K線最高價距離ema144的百分比
 				pec = calcPercent(high, ema144)
 				if (pec < 2) or (high >= ema144)
-					label.new(dBackTunnel ? bar_index : na, low - 100, text="空回彈" + str.tostring(pec) + "%", color=#CE0000, textcolor=color.white, style=label.style_label_up)
+					label.new(dBackTunnel ? bar_index : na, low - 100, text="空回彈" + str.tostring(pec) + "%", color=#600030, textcolor=color.white, style=label.style_label_up)
 					back := 2
 
 	array.set(backTunnel, 0, back) //結果寫入陣列
@@ -300,7 +312,7 @@ checkBarBackEma12() =>
 			0 => 
 				res = open < ema12 and close < ema12 ? 1 : status
 				if res == 1
-					label.new(dBackEMA12 ? bar_index : na, low - 50, text="第1根", color=#BF0060, textcolor=color.white, style=label.style_label_up)
+					label.new(dBackEMA12 ? bar_index : na, low - 50, text="第1根", color=#EA0000, textcolor=color.white, style=label.style_label_up)
 				res
 			//1代表正常線型返回ema12..判斷是否是十字星還是短實體.如果是正常線形就滿足下單條件
 			1 => 
@@ -313,7 +325,7 @@ checkBarBackEma12() =>
 						3 => '短實體'
 						4 => '第2根'
 
-					label.new(dBackEMA12 ? bar_index : na, low - 50, text=msg, color=#BF0060, textcolor=color.white, style=label.style_label_up)
+					label.new(dBackEMA12 ? bar_index : na, low - 50, text=msg, color=#EA0000, textcolor=color.white, style=label.style_label_up)
 					res
 			//3代表是十字星..判斷收盤價是否低於前一根
 			2 => 
@@ -321,7 +333,7 @@ checkBarBackEma12() =>
 				msg = switch res
 					1 => '重新判斷'
 					4 => '第2根'
-				label.new(dBackEMA12 ? bar_index : na, low - 50, text=msg, color=#BF0060, textcolor=color.white, style=label.style_label_up)
+				label.new(dBackEMA12 ? bar_index : na, low - 50, text=msg, color=#EA0000, textcolor=color.white, style=label.style_label_up)
 				res
 			//4代表短實體..判斷收盤價是否低於ema12
 			3 => 
@@ -329,12 +341,12 @@ checkBarBackEma12() =>
 				msg = switch res
 					1 => '重新判斷'
 					4 => '第2根'
-				label.new(dBackEMA12 ? bar_index : na, low - 50, text=msg, color=#BF0060, textcolor=color.white, style=label.style_label_up)
+				label.new(dBackEMA12 ? bar_index : na, low - 50, text=msg, color=#EA0000, textcolor=color.white, style=label.style_label_up)
 				res
 			=> status
 
 		array.set(back12EMA, 1, back) //結果寫入陣列
-
+	
 	back
 
 		
@@ -349,6 +361,8 @@ verifyOrder() =>
 	res = switch order
 		1 => array.get(back12EMA, 0) == 4 ? 1 : 0
 		2 => array.get(back12EMA, 1) == 4 ? 2 : 0
+		3 => 3
+		4 => 4
 		=> 0
 
 	if res > 0
@@ -423,20 +437,26 @@ checkBackTunnel()
 checkBarBackEma12()
 order = verifyOrder()
 
+if order > 0
+	//記錄持倉是多單還空單
+	value = order == 3 ? 1 :
+		 order == 4 ? 2 : order
+	array.set(lastPosition, 0, value) 
 
 ///---------------------------
 /// 下單標示
 ///---------------------------
 plotshape(order == 1, style=shape.labelup, location=location.belowbar, size=size.normal, text='多單', title='多單', color=#32CD32, textcolor=color.white)
 plotshape(order == 2, style=shape.labeldown, location=location.abovebar, size=size.normal, text='空單', title='空單', color=#FF1493, textcolor=color.white)
+plotshape(order == 3, style=shape.labelup, location=location.belowbar, size=size.normal, text='金叉多單', title='金叉多單', color=#32CD32, textcolor=color.white)
+plotshape(order == 4, style=shape.labeldown, location=location.abovebar, size=size.normal, text='死叉空單', title='死叉空單', color=#FF1493	, textcolor=color.white)
 
 
 /// ----------------------
 /// 傳送通知
 /// ----------------------
-
-alertcondition(order == 1, title='Veges-多單通知', message='Veges 做多囉')
-alertcondition(order == 2, title='Veges-空單通知', message='Veges 做空囉')
+alertcondition(order == 1 or order == 3, title='Veges-多單通知', message='Veges 做多囉')
+alertcondition(order == 2 or order == 4, title='Veges-空單通知', message='Veges 做空囉')
 
 
 ///vages12的邏輯 ===================
