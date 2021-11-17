@@ -93,20 +93,6 @@ ema676 = ta.ema(src676, len676)
 plot(ema676, title='EMA676', color=color.new(color.lime, 0), offset=offset676)
 
 
-/// -------------------------------------
-/// 準備拋霧線據跟價格線.止盈止損用
-/// -------------------------------------
-start = input(0.02)
-increment = input(0.02)
-maximum = input(0.2, "Max Value")
-sar = ta.sar(start, increment, maximum)
-// plot(sar, "ParabolicSAR", style=plot.style_cross, color=#2962FF)
-sarHour = request.security(syminfo.tickerid, fourTimes, expression=sar) 
-plot(sarHour, "ParabolicSAR", color=#2962FF)
-
-// highLine = plot(high, "High Line", color.new(color.green, 100))
-// lowLine = plot(low, "Low Line", color.new(color.red, 100))
-
 /// --------------------------------------
 /// 進出場邏輯
 /// --------------------------------------
@@ -158,11 +144,6 @@ var back12EMA = array.new_int(2, 0)
 // value: 0 => initial, 1 => 多單, 2 => 空單
 var lastPosition = array.new_int(1, 0)
 
-
-// 當點持倉記錄
-// key: 只有一個..但用array才能copy出來做判斷..如果只用變數會造成判斷污染
-// value: 0 => initial, 1 => 多單, 2 => 空單
-var position = array.new_int(1, 0)
 
 ///---- functions -------------
 
@@ -395,26 +376,6 @@ verifyOrder() =>
 
 	res
 
-///
-/// 判斷是否要止盈止損
-/// returns {number}: 0 => 未滿足, 1 => 多單, 2 => 空單
-///
-verifyExit() =>
-	res = 0
-	pos = array.get(position, 0)
-	if pos == 1 and ta.crossunder(high, sarHour)
-		//持有多單且K線最高價跟SAR死叉
-		res := 1
-	if pos == 2 and ta.crossover(low, sarHour)
-		//持有空單且K線最低價跟SAR金叉
-		res := 2
-
-	if res > 0 
-		//滿足出場條件..就清掉當前持倉記錄
-		array.set(position, 0, 0)
-
-	res
-
 ///-------- logic ----------
 
 if ta.crossover(ema12, ema144)
@@ -481,11 +442,6 @@ if order > 0
 	//如果是金死叉直接下單..就清掉資料讓下一筆重新判斷
 	array.set(lastPosition, 0, order == 3 or order == 4 ? 0 : order) 
 	
-	//記錄當前持倉是多單還空單
-	array.set(position, 0, order == 3 ? 1 : order == 4 ? 2 : order)
-
-exit = verifyExit()
-
 ///---------------------------
 /// 下單標示
 ///---------------------------
@@ -493,9 +449,6 @@ plotshape(order == 1, style=shape.labelup, location=location.belowbar, size=size
 plotshape(order == 2, style=shape.labeldown, location=location.abovebar, size=size.normal, text='空單', title='空單', color=#FF1493, textcolor=color.white)
 plotshape(order == 3, style=shape.labelup, location=location.belowbar, size=size.normal, text='金叉多單', title='金叉多單', color=#32CD32, textcolor=color.white)
 plotshape(order == 4, style=shape.labeldown, location=location.abovebar, size=size.normal, text='死叉空單', title='死叉空單', color=#FF1493	, textcolor=color.white)
-
-plotshape(exit == 1, style=shape.labelup, location=location.belowbar, size=size.normal, text='多單出場', title='多單出場', color=#616130, textcolor=color.white)
-plotshape(exit == 2, style=shape.labeldown, location=location.abovebar, size=size.normal, text='空單出場', title='空單出場', color=#613030, textcolor=color.white)
 
 /// ----------------------
 /// 傳送通知
