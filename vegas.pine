@@ -92,21 +92,6 @@ offset676 = input.int(title='Offset', defval=0, minval=-500, maxval=500)
 ema676 = ta.ema(src676, len676)
 plot(ema676, title='EMA676', color=color.new(color.lime, 0), offset=offset676)
 
-
-/// -------------------------------------
-/// 準備拋霧線據跟價格線.止盈止損用
-/// -------------------------------------
-start = input(0.02)
-increment = input(0.02)
-maximum = input(0.2, "Max Value")
-sar = ta.sar(start, increment, maximum)
-// plot(sar, "ParabolicSAR", style=plot.style_cross, color=#2962FF)
-sarHour = request.security(syminfo.tickerid, fourTimes, expression=sar) 
-plot(sarHour, "ParabolicSAR", color=#2962FF)
-
-// highLine = plot(high, "High Line", color.new(color.green, 100))
-// lowLine = plot(low, "Low Line", color.new(color.red, 100))
-
 /// --------------------------------------
 /// 進出場邏輯
 /// --------------------------------------
@@ -117,11 +102,8 @@ plot(sarHour, "ParabolicSAR", color=#2962FF)
 /// 	3. 陰線實體..開盤低於ema12.
 ///     4. K線最低價回踩 144,169 (距離2%內就算回踩)
 /// 	5. K線開盤和收盤要高於ema12
-/// 止盈:
-///		@TODO
-/// 止損:
-///		@TODO
-///
+/// 止盈止損:
+///		K線收盤低於ema576,676 (相當於1小時的ema144,169) 
 /// --------------------------------------
 /// 做空條件:
 /// 	1. 48EMA死叉跌破 576,676
@@ -129,10 +111,8 @@ plot(sarHour, "ParabolicSAR", color=#2962FF)
 ///	    3. 陽線實體..開盤高於ema12.
 ///     4. K線最高價回彈 144,169 (距離2%內就算回彈)
 /// 	5. K線開盤和收盤要低於ema12
-/// 止盈:
-///		@TODO
-/// 止損:
-///		@TODO
+/// 止盈止損:
+///		K線收盤高於ema576,676 (相當於1小時的ema144,169) 
 /// --------------------------------------
 
 ///------ variables --------------
@@ -402,13 +382,25 @@ verifyOrder() =>
 verifyExit() =>
 	res = 0
 	pos = array.get(position, 0)
-	if pos == 1 and ta.crossunder(high, sarHour)
-		//持有多單且K線最高價跟SAR死叉
-		res := 1
-	if pos == 2 and ta.crossover(low, sarHour)
-		//持有空單且K線最低價跟SAR金叉
-		res := 2
-
+	
+	if pos == 1
+		//持有多單.
+		if ema576 > ema676
+			//ema676在下..如果K棒收盤跌破了676就出場
+			res := barstate.isconfirmed and close < ema676 ? 1 : 0
+		else
+			//ema576在下..如果K棒收盤跌破了576就出場
+			res := barstate.isconfirmed and close < ema576 ? 1 : 0
+	
+	if pos == 2
+		//持有空單
+		if ema676 > ema576
+			//ema676在上..如果K棒收盤突破了676就出場
+			res := barstate.isconfirmed and close > ema676 ? 2 : 0
+		else
+			//ema576在上..如果K棒收盤突破了576就出場
+			res := barstate.isconfirmed and close > ema576 ? 2 : 0
+	
 	if res > 0 
 		//滿足出場條件..就清掉當前持倉記錄
 		array.set(position, 0, 0)
@@ -502,14 +494,4 @@ plotshape(exit == 2, style=shape.labeldown, location=location.abovebar, size=siz
 /// ----------------------
 alertcondition(order == 1 or order == 3, title='Veges-多單通知', message='Veges 做多囉')
 alertcondition(order == 2 or order == 4, title='Veges-空單通知', message='Veges 做空囉')
-
-
-///vages12的邏輯 ===================
-// meme = (ema144 > ema169 and ema12[1] < ema144[1] and ema12 >= ema144 and ema12 >= ema169 and ema12[4] < ema169[4]) or (ema144 < ema169 and ema12[1] < ema169[1] and ema12 >= ema144 and ema12 >= ema169 and ema12[4] < ema144[4])
-// meme1 = (ema144 > ema169 and ema12[1] > ema169[1] and ema12 <= ema144 and ema12 <= ema169 and ema12[4] > ema144[4]) or (ema144 < ema169 and ema12[1] > ema144[1] and ema12 <= ema144 and ema12 <= ema169 and ema12[4] > ema169[4])
-
-// plotshape(meme, style=shape.labelup, color=color.new(color.green, 0), location=location.belowbar, size=size.small, text='上', textcolor=color.new(color.white, 0), title='上')
-// plotshape(meme1, style=shape.labeldown, color=color.new(color.red, 0), location=location.abovebar, size=size.small, text='下', textcolor=color.new(color.white, 0), title='下')
-
-// alertcondition(meme, title='多', message='做多瞜')
-// alertcondition(meme1, title='空', message='做空瞜')
+alertcondition(exit > 0, title='Veges-出場通知', message='Veges 出場囉')
