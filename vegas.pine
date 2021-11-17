@@ -3,7 +3,7 @@
 
 
 //@version=5
-indicator(title='vegas改', shorttitle='vegas改', overlay=true, max_labels_count=500)
+strategy(title='vegas回測', shorttitle='vegas回測', overlay=true, max_labels_count=500)
 
 
 //show debug data label
@@ -479,19 +479,12 @@ if order > 0
 exit = verifyExit()
 
 ///---------------------------
-/// 下單標示
+/// 進出場
 ///---------------------------
-plotshape(order == 1, style=shape.labelup, location=location.belowbar, size=size.normal, text='多單', title='多單', color=#32CD32, textcolor=color.white)
-plotshape(order == 2, style=shape.labeldown, location=location.abovebar, size=size.normal, text='空單', title='空單', color=#FF1493, textcolor=color.white)
-plotshape(order == 3, style=shape.labelup, location=location.belowbar, size=size.normal, text='金叉多單', title='金叉多單', color=#32CD32, textcolor=color.white)
-plotshape(order == 4, style=shape.labeldown, location=location.abovebar, size=size.normal, text='死叉空單', title='死叉空單', color=#FF1493	, textcolor=color.white)
+strategy.entry("enter long", strategy.long, qty = 1, when = order == 1 or order == 3, limit=1, comment="多單")
+strategy.entry("enter short", strategy.short, qty = 1, when = order == 2 or order == 4, limit=1, comment="空單")
 
-plotshape(exit == 1, style=shape.labelup, location=location.belowbar, size=size.normal, text='多單出場', title='多單出場', color=#616130, textcolor=color.white)
-plotshape(exit == 2, style=shape.labeldown, location=location.abovebar, size=size.normal, text='空單出場', title='空單出場', color=#613030, textcolor=color.white)
 
-/// ----------------------
-/// 傳送通知
-/// ----------------------
-alertcondition(order == 1 or order == 3, title='Veges-多單通知', message='Veges 做多囉')
-alertcondition(order == 2 or order == 4, title='Veges-空單通知', message='Veges 做空囉')
-alertcondition(exit > 0, title='Veges-出場通知', message='Veges 出場囉')
+strategy.close("enter long", qty = 1, when = exit == 1, comment="多單出場")
+strategy.close("enter short", qty = 1, when = exit == 2, comment="空單出場")
+
