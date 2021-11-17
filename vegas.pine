@@ -100,12 +100,7 @@ start = input(0.02)
 increment = input(0.02)
 maximum = input(0.2, "Max Value")
 sar = ta.sar(start, increment, maximum)
-// plot(sar, "ParabolicSAR", style=plot.style_cross, color=#2962FF)
-sarHour = request.security(syminfo.tickerid, fourTimes, expression=sar) 
-plot(sarHour, "ParabolicSAR", color=#2962FF)
-
-// highLine = plot(high, "High Line", color.new(color.green, 100))
-// lowLine = plot(low, "Low Line", color.new(color.red, 100))
+plot(sar, "ParabolicSAR", style=plot.style_cross, color=#2962FF)
 
 /// --------------------------------------
 /// 進出場邏輯
@@ -402,10 +397,10 @@ verifyOrder() =>
 verifyExit() =>
 	res = 0
 	pos = array.get(position, 0)
-	if pos == 1 and ta.crossunder(high, sarHour)
+	if pos == 1 and ta.crossunder(high, sar)
 		//持有多單且K線最高價跟SAR死叉
 		res := 1
-	if pos == 2 and ta.crossover(low, sarHour)
+	if pos == 2 and ta.crossover(low, sar)
 		//持有空單且K線最低價跟SAR金叉
 		res := 2
 
