@@ -6,13 +6,15 @@
 indicator(title='vegas改', shorttitle='vegas改', overlay=true, max_labels_count=500)
 
 
-//show debug data label
-dCross = input.bool(defval=false, title="顯示交叉", group="Debug")
-dEMA48 = input.bool(defval=false, title="顯示EMA48", group="Debug")
-dDojiShort = input.bool(defval=false, title="顯示十字或短實體", group="Debug")
-dBackTunnel = input.bool(defval=false, title="顯示回踩均線", group="Debug")
-dBackEMA12 = input.bool(defval=false, title="顯示返回EMA12", group="Debug")
-
+///
+/// show debug data label
+///
+dCross = input.bool(defval=false, title="標示均線交叉", group="Debug")
+dEMA48 = input.bool(defval=false, title="標示4倍EMA12", group="Debug")
+dDojiShort = input.bool(defval=false, title="標示十字星.短實體", group="Debug")
+dBackTunnel = input.bool(defval=false, title="標示回踩通道", group="Debug")
+dBackEMA12 = input.bool(defval=false, title="標示返回EMA12", group="Debug")
+dProfitPercent = input.bool(defval=false, title="標示獲利停損%", group="Debug")
 
 /// -------------------------------------------
 /// 準備均線數據..
@@ -132,17 +134,24 @@ var backTunnel = array.new_int(1, 0)
 // value: 0 => initial, 1 => 正常線形, 2 => 十字星, 3 => 短實體, 4 => 下單條件達成
 var back12EMA = array.new_int(2, 0)
 
-
 // 最後一筆持倉記錄
 // key: 只有一個..但用array才能copy出來做判斷..如果只用變數會造成判斷污染
 // value: 0 => initial, 1 => 多單, 2 => 空單
 var lastPosition = array.new_int(1, 0)
 
-
 // 當點持倉記錄
-// key: 只有一個..但用array才能copy出來做判斷..如果只用變數會造成判斷污染
+// key: 0 => 持倉類型, 1 => 持倉bar_index, 2 => 止盈止損percent 
 // value: 0 => initial, 1 => 多單, 2 => 空單
-var position = array.new_int(1, 0)
+var position = array.new_int(3, 0)
+
+// 下單價格
+var float orderPrice = 0
+
+// 止盈百分比
+profitPercent = input.int(defval=3, minval=1, title='基本止盈百分比', group='止盈設定')
+
+// 累進百分比
+progPercent = input.int(defval=5, minval=1, title='累進百分比', group='止盈設定')
 
 ///---- functions -------------
 
@@ -151,7 +160,7 @@ var position = array.new_int(1, 0)
 /// @returns {float}: 差異百分比
 ///
 calcPercent(num1, num2) =>
-	pec = (math.abs(num1 - num2) / num2 ) * 100
+	pec = ((num1 - num2) / num2 ) * 100
     pec
 
 ///
@@ -189,7 +198,7 @@ checkIsDoji() =>
 checkIsShortBody() =>
 	C_BodyHi = math.max(close, open) 
 	C_BodyLo = math.min(close, open)
-	isShort = calcPercent(C_BodyHi, C_BodyLo) <= 0.2
+	isShort = math.abs(calcPercent(C_BodyHi, C_BodyLo)) <= 0.2
 	isShort
 
 ///
@@ -203,11 +212,12 @@ checkBackTunnel() =>
 	gold676 = array.get(lineCross, 3)
 
 	lastPos = array.get(lastPosition, 0)
+	pos = array.get(position, 0)
 	back = array.get(backTunnel, 0)
 	
 	//多單回踩邏輯
-	if gold144 == 1 and gold169 == 1 and lastPos == 1
-		//上一筆資料持有多單..15分金叉直接下單
+	if gold144 == 1 and gold169 == 1 and lastPos == 1 and pos != 1
+		//上一筆資料持有多單且手上沒有多單(已出場)..15分金叉直接下單
 		back := 3
 	else if gold144 == 1 and gold576 == 1 and gold169 == 1 and gold676 == 1 and back != 1
 		//1倍跟4倍均線都金叉..還沒有K線回踩通道的記錄.
@@ -216,20 +226,20 @@ checkBackTunnel() =>
 			if(ema144 > ema169) 
 				//ema144在上..計算K線最低價距離ema144的百分比
 				pec = calcPercent(low, ema144)
-				if (pec < 2) or (low <= ema144)
+				if (math.abs(pec) < 2) or (low <= ema144)
 					label.new(dBackTunnel ? bar_index : na, high + 100, text="多回踩" + str.tostring(pec) + "%", color=#005757, textcolor=color.white)
 					back := 1 
 			else
 				//ema169在上..計算K線最低價距離ema169的百分比
 				pec = calcPercent(low, ema169)
 				// label.new(bar_index, high + 100, text=str.tostring(pec))
-				if (pec < 2) or (low <= ema169)
+				if (math.abs(pec) < 2) or (low <= ema169)
 					label.new(dBackTunnel ? bar_index : na, high + 100, text="多回踩" + str.tostring(pec) + "%", color=#005757, textcolor=color.white)
 					back := 1
 		
 	//空單回踩邏輯
-	if gold144 == 2 and gold169 == 2 and lastPos == 2
-		//上一筆資料持有空單..15分死叉直接下單
+	if gold144 == 2 and gold169 == 2 and lastPos == 2 and pos != 2
+		//上一筆資料持有空單且手上沒有空單(已出場).15分死叉直接下單
 		back := 4
 	else if gold144 == 2 and gold576 == 2 and gold169 == 2 and gold676 == 2 and back != 2
 		//1倍跟4倍均線都死叉.且還沒有K線回踩通道的記錄
@@ -238,13 +248,13 @@ checkBackTunnel() =>
 			if(ema144 > ema169) 
 				//ema169在下.計算K線最高價距離ema169的百分比
 				pec = calcPercent(high, ema169)
-				if (pec < 2) or (high >= ema169)
+				if (math.abs(pec) < 2) or (high >= ema169)
 					label.new(dBackTunnel ? bar_index : na, low - 100, text="空回彈" + str.tostring(pec) + "%", color=#600030, textcolor=color.white, style=label.style_label_up)
 					back := 2 
 			else
 				//ema144在下.計算K線最高價距離ema144的百分比
 				pec = calcPercent(high, ema144)
-				if (pec < 2) or (high >= ema144)
+				if (math.abs(pec) < 2) or (high >= ema144)
 					label.new(dBackTunnel ? bar_index : na, low - 100, text="空回彈" + str.tostring(pec) + "%", color=#600030, textcolor=color.white, style=label.style_label_up)
 					back := 2
 
@@ -353,7 +363,7 @@ checkBarBackEma12() =>
 
 ///
 /// 判斷是否滿足下單條件..
-/// returns {number}: 0 => 未滿足, 1 => 多單, 2空單
+/// @returns {number}: 0 => 未滿足, 1 => 多單, 2空單
 /// 
 ///
 verifyOrder() =>
@@ -372,38 +382,106 @@ verifyOrder() =>
 			if i < 2
 				array.set(back12EMA, i, 0)
 		array.set(backTunnel, 0, 0)
-
+		array.set(position, 2, 0)
 	res
 
 ///
-/// 判斷是否要止盈止損
-/// returns {number}: 0 => 未滿足, 1 => 多單, 2 => 空單
+/// 判斷收盤價是否在通道均線的上或下..
+/// @param {number}: 1 均線以上, 0 均線以下  
+/// @returns {boolean}: true 是, false 否 
+///
+checkCrossLine(status) =>
+	res = false
+	if status == 0
+		if ema576 > ema676
+			//ema676在下..如果K棒收盤跌破了676就是true
+			res := barstate.isconfirmed and close < ema676 ? true : false
+		else
+			//ema576在下..如果K棒收盤跌破了576就是true
+			res := barstate.isconfirmed and close < ema576 ? true : false
+	if status == 1
+		if ema676 > ema576
+			//ema676在上..如果K棒收盤突破了676就是true
+			res := barstate.isconfirmed and close > ema676 ? true : false
+		else
+			//ema576在上..如果K棒收盤突破了576就是true
+			res := barstate.isconfirmed and close > ema576 ? true : false
+	
+	res
+
+
+///
+/// 判斷獲利是否達標
+/// @param {number} profit: 獲利幅度百分比
+/// @param {number} posState: 持倉狀態..1 => 多單, 2 => 空單
+/// @returns {boolean}: true => 達標, false => 未達標
+///
+checkOverProfit(profit, posState) =>
+	refPercent = array.get(position, 2) //累計止盈參考點%
+	isCrossTunnel = checkCrossLine(posState - 1) //判斷K線是否在通道均線的上方或下方...posState - 1 正好符合參數
+	res = false
+
+	if profit > profitPercent
+		// 獲利高過基本停利點邏輯
+		if refPercent == 0
+			//第一次到達基數..記錄已達標..
+			array.set(position, 2, progPercent)
+			res := false
+		
+		if profit > refPercent
+			//獲利高過累進值..
+			addPercent = int(profit - progPercent) + profitPercent
+			// msg = 'profit:' + str.tostring(profit) + ', add:' + str.tostring(addPercent) + ', prog:' + str.tostring(progPercent) + ', ref:' + str.tostring(refPercent)
+			// label.new(bar_index, high + 10, text='累計%', color=#444444, textcolor=color.white, tooltip=msg)
+			if addPercent > refPercent
+				//獲利高過累進值.基數就跟著增加
+				array.set(position, 2, addPercent)
+				res := false
+		else if refPercent > 0 and profit <= refPercent
+			//破了獲利參考點就出場
+			res := true
+
+	else
+		// 獲利低於基本停利點邏輯
+		if isCrossTunnel
+			//破了均線就出場
+			res := true
+		else if refPercent > 0 and profit < refPercent
+			//曾經達標又降回來
+			if profit <= 0
+				//.歸零且還沒跌破均線就賭看會不會爬回來
+				array.set(position, 2, 0) //累計參考點設為0..不然一爬回馬上就會被洗出場..
+				res := false
+			else
+				//破了基本獲利且沒歸零..就出場
+				res := true
+	res
+
+///
+/// 判斷是否要出場
+/// returns {number}: 0 => 不出場, 1 => 多單出場, 2 => 空單出場
 ///
 verifyExit() =>
 	res = 0
-	pos = array.get(position, 0)
-	
+	pos = array.get(position, 0) //當前持倉..1多單 2空單
+
 	if pos == 1
-		//持有多單.
-		if ema576 > ema676
-			//ema676在下..如果K棒收盤跌破了676就出場
-			res := barstate.isconfirmed and close < ema676 ? 1 : 0
-		else
-			//ema576在下..如果K棒收盤跌破了576就出場
-			res := barstate.isconfirmed and close < ema576 ? 1 : 0
-	
+		//持有多單邏輯
+		pec = calcPercent(close, orderPrice) //計算當前收盤價跟orderPrice的差異百分比
+		// label.new(dProfitPercent ? bar_index : na, high + 10, text=str.tostring(pec), color=#008866, textcolor=color.white)
+		res := checkOverProfit(pec, pos) ? 1 : 0 //判斷是否出場
+		
 	if pos == 2
-		//持有空單
-		if ema676 > ema576
-			//ema676在上..如果K棒收盤突破了676就出場
-			res := barstate.isconfirmed and close > ema676 ? 2 : 0
-		else
-			//ema576在上..如果K棒收盤突破了576就出場
-			res := barstate.isconfirmed and close > ema576 ? 2 : 0
-	
+		//持有空單邏輯
+		pec = calcPercent(orderPrice, close) //計算當前收盤價跟orderPrice的差異要分比..注意參數互換了
+		// label.new(dProfitPercent ? bar_index : na, high + 10, text=str.tostring(pec), color=#A42D00, textcolor=color.white)
+		res := checkOverProfit(pec, pos) ? 2 : 0 //判斷是否出場
+
 	if res > 0 
 		//滿足出場條件..就清掉當前持倉記錄
 		array.set(position, 0, 0)
+		array.set(position, 1, 0)
+		array.set(position, 2, 0)
 
 	res
 
@@ -473,8 +551,13 @@ if order > 0
 	//如果是金死叉直接下單..就清掉資料讓下一筆重新判斷
 	array.set(lastPosition, 0, order == 3 or order == 4 ? 0 : order) 
 	
-	//記錄當前持倉是多單還空單
-	array.set(position, 0, order == 3 ? 1 : order == 4 ? 2 : order)
+	
+	array.set(position, 0, order == 3 ? 1 : order == 4 ? 2 : order)//記錄當前持倉是多單還空單
+	array.set(position, 1, bar_index) //記錄bar_index
+	array.set(position, 2, 0) //歸零止盈參考點
+
+	//記錄下單價位
+	orderPrice := close
 
 exit = verifyExit()
 
