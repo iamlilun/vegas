@@ -8,7 +8,7 @@
 //*------------------------------------
 
 //@version=5
-indicator(title='vegas改', shorttitle='vegas改', overlay=true, max_labels_count=500)
+indicator(title='vegas不回踩', shorttitle='vegas不回踩', overlay=true, max_labels_count=500)
 
 
 //show debug data label
@@ -62,7 +62,7 @@ plot(ema48, title='EMA48', color=color.new(#FF0088, dEMA48 ? 0 : 100), offset=of
 len144 = input.int(144, minval=1, title='Length')
 src144 = input(close, title='Source')
 offset144 = input.int(title='Offset', defval=0, minval=-500, maxval=500)
-ema144 = ta.ema(src144, len144)git
+ema144 = ta.ema(src144, len144)
 plot(ema144, title='EMA144', color=color.new(color.orange, 0), offset=offset144)
 
 len169 = input.int(169, minval=1, title='Length')
@@ -161,57 +161,41 @@ verifyOrder() =>
 if ta.crossover(ema12, ema144)
 	//ema12金叉突破ema144
 	label.new(dCross ? bar_index : na, high + 100, text="144金叉", color=#FFD306)
-	array.set(backTunnel, 0, 0)
-	array.set(back12EMA, 1, 0)
 	array.set(lineCross, 0, 1)
 
 if ta.crossover(ema12, ema169)
 	//ema12金叉突破ema169
 	label.new(dCross ? bar_index : na, high + 100, text="169金叉", color=#FFD306)
-	array.set(backTunnel, 0, 0)
-	array.set(back12EMA, 1, 0)
 	array.set(lineCross, 1, 1)
 
 if ta.crossover(ema48, ema576)
 	//ema48金叉突破ema576
 	label.new(dCross ? bar_index : na, high + 100, text="576金叉", color=#FFF0AC)
-	array.set(backTunnel, 0, 0)
-	array.set(back12EMA, 1, 0)
 	array.set(lineCross, 2, 1)
 
 if ta.crossover(ema48, ema676)
 	//ema48金叉突破ema676
 	label.new(dCross ? bar_index : na, high + 100, text="676金叉", color=#FFF0AC)
-	array.set(backTunnel, 0, 0)
-	array.set(back12EMA, 1, 0)
 	array.set(lineCross, 3, 1)
 
 if ta.crossunder(ema12, ema144)
 	//ema12死叉跌破ema144
 	label.new(dCross ? bar_index : na, high + 100, text="144死叉", color=#8E8E8E)
-	array.set(backTunnel, 0, 0)
-	array.set(back12EMA, 0, 0)
 	array.set(lineCross, 0, 2)
 
 if ta.crossunder(ema12, ema169)
 	//ema12死叉跌破ema169
 	label.new(dCross ? bar_index : na, high + 100, text="169死叉", color=#8E8E8E)
-	array.set(backTunnel, 0, 0)
-	array.set(back12EMA, 0, 0)
 	array.set(lineCross, 1, 2)
 	
 if ta.crossunder(ema48, ema576)
 	//ema48死叉跌破ema576
 	label.new(dCross ? bar_index : na, high + 100, text="576死叉", color=#D0D0D0)
-	array.set(backTunnel, 0, 0)
-	array.set(back12EMA, 0, 0)
 	array.set(lineCross, 2, 2)
 
 if ta.crossunder(ema48, ema676)
 	//ema48死叉跌破ema676.
 	label.new(dCross ? bar_index : na, high + 100, text="676死叉", color=#D0D0D0)
-	array.set(backTunnel, 0, 0)
-	array.set(back12EMA, 0, 0)
 	array.set(lineCross, 3, 2)
 
 
